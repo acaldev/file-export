@@ -1,0 +1,181 @@
+version: '3'
+
+networks:
+    frontend:
+      driver: ${NETWORKS_DRIVER}
+    backend:
+      driver: ${NETWORKS_DRIVER}
+
+volumes:
+    redis:
+        driver: ${VOLUMES_DRIVER}
+    mariadb:
+        driver: ${VOLUMES_DRIVER}
+    mongo:
+        driver: ${VOLUMES_DRIVER}
+    phpmyadmin:
+      driver: ${VOLUMES_DRIVER}
+    docker-in-docker:
+        driver: ${VOLUMES_DRIVER}
+
+
+services:
+
+  ### Workspace Utilities ##################################
+    workspace:
+      container_name: stack_workspace
+      build:
+        context: containers/workspace
+        args:
+          - PUID=${WORKSPACE_PUID}
+          - PGID=${WORKSPACE_PGID}
+          - TZ=${WORKSPACE_TIMEZONE}
+          - INSTALL_SDKMAN=${WORKSPACE_INSTALL_SDKMAN}
+          - INSTALL_SSH2=${WORKSPACE_INSTALL_SSH2}
+          - NVM_NODEJS_ORG_MIRROR=${WORKSPACE_NVM_NODEJS_ORG_MIRROR}
+          - INSTALL_NODE=${WORKSPACE_INSTALL_NODE}
+          - NPM_REGISTRY=${WORKSPACE_NPM_REGISTRY}
+          - INSTALL_YARN=${WORKSPACE_INSTALL_YARN}
+          - INSTALL_NPM_GULP=${WORKSPACE_INSTALL_NPM_GULP}
+          - INSTALL_NPM_BOWER=${WORKSPACE_INSTALL_NPM_BOWER}
+          - INSTALL_NPM_VUE_CLI=${WORKSPACE_INSTALL_NPM_VUE_CLI}
+          - INSTALL_NPM_ANGULAR_CLI=${WORKSPACE_INSTALL_NPM_ANGULAR_CLI}
+          - INSTALL_WORKSPACE_SSH=${WORKSPACE_INSTALL_WORKSPACE_SSH}
+          - INSTALL_PING=${WORKSPACE_INSTALL_PING}
+          - NODE_VERSION=${WORKSPACE_NODE_VERSION}
+          - YARN_VERSION=${WORKSPACE_YARN_VERSION}
+          - INSTALL_SUPERVISOR=${WORKSPACE_INSTALL_SUPERVISOR}
+          - INSTALL_MYSQL_CLIENT=${WORKSPACE_INSTALL_MYSQL_CLIENT}
+          - http_proxy
+          - https_proxy
+          - no_proxy
+      volumes:
+        - ../apps:/var/www/html
+        - docker-in-docker:/certs/client
+        - ./containers/php-worker/supervisord.d:/etc/supervisord.d
+      ports:
+        - "${WORKSPACE_SSH_PORT}:22"
+        - "${WORKSPACE_BROWSERSYNC_HOST_PORT}:3000"
+        - "${WORKSPACE_BROWSERSYNC_UI_HOST_PORT}:3001"
+        - "${WORKSPACE_VUE_CLI_SERVE_HOST_PORT}:8080"
+        - "${WORKSPACE_VUE_CLI_UI_HOST_PORT}:8000"
+        - "${WORKSPACE_ANGULAR_CLI_SERVE_HOST_PORT}:4200"
+      tty: true
+      environment:
+        - DOCKER_HOST=tcp://docker-in-docker:2376
+        - DOCKER_TLS_VERIFY=1
+        - DOCKER_TLS_CERTDIR=/certs
+        - DOCKER_CERT_PATH=/certs/client
+      networks:
+        - frontend
+        - backend
+      links:
+      - docker-in-docker
+
+    docker-in-docker:
+        container_name: stack_docker-in-docker
+        image: docker:19.03-dind
+        environment:
+          DOCKER_TLS_SAN: DNS:docker-in-docker      
+        privileged: true
+        volumes:
+          - ../apps:/var/www/html
+          - docker-in-docker:/certs/client
+        expose:
+          - 2375
+        networks:
+          - backend
+    
+    springboot:
+      container_name: stack_springboot
+      build: 
+          context: ./containers/springboot
+      ports:
+            - "${SPRING_BOOT_HOST_HTTP_PORT}:8082"
+      volumes:
+          - ../apps/API:/usr/src/mymaven
+      expose:
+          - 8082
+      links:
+            - docker-in-docker
+      networks:
+            - backend
+        
+    nginx:
+        container_name: stack_nginx
+        build:
+            context: ./containers/nginx
+            args:
+              - http_proxy
+              - https_proxy
+              - no_proxy
+              
+        environment:
+            - TZ=${WORKSPACE_TIMEZONE}
+        ports:
+            - "${NGINX_HOST_HTTP_PORT}:80"
+            - "${NGINX_HOST_HTTPS_PORT}:443"
+        restart: always
+        volumes:
+            - ../apps:/var/www/html
+            - ../logs/nginx:/var/log/nginx
+            - ./containers/nginx/nginx.conf:/etc/nginx/nginx.conf
+            - ./containers/nginx/default.conf:/etc/nginx/conf.d/default.conf
+            - ./containers/nginx/snippets/:/etc/nginx/snippets
+            - ./containers/nginx/sites-available/:/etc/nginx/sites-available
+            - ./containers/nginx/ssl/:/etc/nginx/ssl
+        links:
+            - docker-in-docker
+        depends_on:
+            - springboot
+        networks:
+            frontend:
+            backend:
+                aliases:
+                  - api.app.test
+   
+    mariadb:
+        container_name: stack_mariadb
+        build:
+            context: ./containers/mariadb
+            args:
+              - http_proxy
+              - https_proxy
+              - no_proxy
+              - MARIADB_VERSION=${MARIADB_VERSION}
+        volumes:
+            - ../volumes/mysql:/var/lib/mysql
+            - ${MARIADB_ENTRYPOINT_INITDB}:/docker-entrypoint-initdb.d
+        ports:
+            - "${MARIADB_PORT}:3306"
+        environment:
+        - TZ=${WORKSPACE_TIMEZONE}
+        - MYSQL_DATABASE=${MARIADB_DATABASE}
+        - MYSQL_USER=${MARIADB_USER}
+        - MYSQL_PASSWORD=${MARIADB_PASSWORD}
+        - MYSQL_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
+        networks:
+        - backend
+    
+    mongodb:
+      container_name: stack_mongodb
+      build: ./containers/mongodb
+      ports:
+        - "${MONGODB_PORT}:27017"
+      volumes:
+        - mongo:/data/db
+        - mongo:/data/configdb
+      networks:
+        - backend
+
+    redis:
+      container_name: stack_redis
+      build: ./containers/redis
+      environment:
+        - TZ=${WORKSPACE_TIMEZONE}
+      volumes:
+        - ../volumes/redis:/data
+      ports:
+        - "${REDIS_PORT}:6379"
+      networks:
+        - backend
