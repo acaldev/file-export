@@ -11,7 +11,7 @@ A file export benchmark
 1.- Run command
 
 ```
-./stack.sh start
+./stack.sh build
 ```
 
 2.- Add to your host file
@@ -50,4 +50,16 @@ then type root password "root" 😎
 
 ```
 ./stack.sh ng build
+```
+
+## Run
+
+```
+./stack.sh start
+```
+
+## Available commands
+
+```
+./stack.sh --help
 ```
