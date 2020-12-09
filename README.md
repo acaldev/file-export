@@ -40,8 +40,13 @@ mysql -h mariadb -u root database < apps/test-db/employees.sql
 
 then type root password "root" 😎
 
+4.- Install angular npm modules
 
-4.- Compile angular client
+```
+./stack.sh npm install
+```
+
+5.- Compile angular client
 
 ```
 ./stack.sh ng build
