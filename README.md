@@ -35,7 +35,7 @@ then type root password "root"
 
 ```
 ./stack.sh ssh
-mysql -h mariadb -u root database < apps/test-db/employees.sql
+mysql -h mariadb -u root < apps/test-db/employees.sql
 ```
 
 then type root password "root" 😎
